@@ -64,3 +64,49 @@ public class DeviceController {
 ```
 
 Notice how much cleaner it is. This isn’t just a matter of aesthetics. The code is better because two concerns that were tangled, the algorithm for device shutdown and error handling, are now separated. You can look at each of those concerns and understand them independently.
+
+# Write Your `Try-Catch-Finally` Statement First
+
+One of the most interesting things about exceptions is that they define a scope within your program. When you execute code in the `try` portion of a `try-catch-finally` statement, you are stating that execution can abort at any point and then resume at the `catch`.
+In a way,`try` blocks are like transactions. Your `catch` has to leave your program in a consistent state, no matter what happens in the `try`. For this reason it is good practice to start with a `try-catch-finally` statement when you are writing code that could throw exceptions. This helps you define what the user of that code should expect, no matter what goes wrong with the code that is executed in the `try`.
+Let’s look at an example. We need to write some code that accesses a file and reads some serialized objects.
+We start with a unit test that shows that we’ll get an exception when the file doesn’t exist:
+```java
+@Test(expected = StorageException.class)
+public void retrieveSectionShouldThrowOnInvalidFileName() {
+    sectionStore.retrieveSection("invalid - file");
+}
+```
+
+The test drives us to create this stub:
+
+public List<RecordedGrip> retrieveSection(String sectionName) {
+    // dummy return until we have a real implementation
+    return new ArrayList<RecordedGrip>();
+}
+
+Our test fails because it doesn’t throw an exception. Next, we change our implementation so that it attempts to access an invalid file. This operation throws an exception:
+```java
+public List<RecordedGrip> retrieveSection(String sectionName) {
+    try {
+        FileInputStream stream = new FileInputStream(sectionName)
+    } catch (Exception e) {
+        throw new StorageException("retrieval error", e);
+    }
+    return new ArrayList<RecordedGrip>();
+}
+```
+Our test passes now because we’ve caught the exception. At this point, we can refactor. We can narrow the type of the exception we catch to match the type that is actually thrown from the `FileInputStream` constructor: `FileNotFoundException` :
+```java
+public List<RecordedGrip> retrieveSection(String sectionName) {
+    try {
+        FileInputStream stream = new FileInputStream(sectionName);
+        stream.close();
+    } catch (FileNotFoundException e) {
+        throw new StorageException("retrieval error”, e);
+    }
+    return new ArrayList<RecordedGrip>();
+}
+```
+Now that we’ve defined the scope with a `try-catch` structure, we can use TDD to build up the rest of the logic that we need. That logic will be added between the creation of the `FileInputStream` and the `close`, and can pretend that nothing goes wrong.
+Try to write tests that force exceptions, and then add behavior to your handler to satisfy your tests. This will cause you to build the transaction scope of the `try` block first and will help you maintain the transaction nature of that scope.
